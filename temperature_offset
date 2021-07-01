@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+
+import re, sys
+
+script_filename = sys.argv[0]
+gcode_filename = sys.argv[1]
+
+with open(gcode_filename, 'r') as gcode_file:
+	gcode = gcode_file.readlines()
+	gcode_file.close()
+
+temperature_offset = 0
+bed_temperature_offset = 0
+
+temperature_offset_regex = r';TEMPERATURE_OFFSET:(-?\d+)'
+temperature_regex = r'^M104 S([1-9]\d*)'
+bed_temperature_offset_regex = r';BED_TEMPERATURE_OFFSET:(-?\d+)'
+bed_temperature_regex = r'^M140 S([1-9]\d*)'
+
+with open(gcode_filename, 'w') as gcode_file:
+	gcode_file.write('; post-processed by ' + script_filename + ' to compensate for printer-specific thermistor errors\n')
+	for original_gcode_line in gcode:
+		for group in re.findall(temperature_offset_regex, original_gcode_line):
+			temperature_offset = int(group)
+		for group in re.findall(bed_temperature_offset_regex, original_gcode_line):
+			bed_temperature_offset = int(group)
+		gcode_line = original_gcode_line
+		for group in re.findall(temperature_regex, original_gcode_line):
+			temperature = max(int(group) + temperature_offset, 0)
+			gcode_line = re.sub(temperature_regex, 'M104 S' + str(temperature), original_gcode_line)
+		if gcode_line == original_gcode_line:
+			for group in re.findall(bed_temperature_regex, original_gcode_line):
+				bed_temperature = max(int(group) + bed_temperature_offset, 0)
+				gcode_line = re.sub(bed_temperature_regex, 'M140 S' + str(bed_temperature), original_gcode_line)
+		gcode_file.write(gcode_line)
+	gcode_file.close()
